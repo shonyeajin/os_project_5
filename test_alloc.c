@@ -8,12 +8,13 @@
 
 int main()
 {
+		printf("Hi");
 	//mmap to get page
 	if(init_alloc())
 		return 1;	//mmap failed
 
-	char *str = alloc(512);
-	char *str2 = alloc(512);
+	char *str = alloc(512);//512바잍 할당 요청
+	char *str2 = alloc(512);//ㅇㅇ
 
 	if(str == NULL || str2 == NULL)
 	{
@@ -22,10 +23,10 @@ int main()
 	}
 
 	strcpy(str, "Hello, world!");
-	if(strcmp("Hello, world!", str))
-	  printf("Hello, world! test failed\n");
+	if(strcmp("Hello, world!", str))//같은지 비교
+	  printf("Hello, world! test failed\n");//안같으면
 	
-	else
+	else//같으면
 	  printf("Hello, world! test passed\n");
 	
 	dealloc(str);
