@@ -9,13 +9,14 @@
 #include "ealloc.h"
 
 //나중에 지우기
+/*
 void printvsz(char *hint) {
   char buffer[256];
   sprintf(buffer, "echo -n %s && echo -n VSZ: && cat /proc/%d/stat | cut -d\" \" -f23", hint, getpid());
   system(buffer);
  // getchar();
 }
-
+*/
 
 
 typedef struct memstr{
@@ -116,17 +117,39 @@ char *alloc(int a){
 }
 
 void dealloc(char *a){
+		//주소만 보고 어느 페이지에 속하는지 알수 없음...
+		if(a==m.mem[0]){
+				for(int i=0;i<PAGESIZE/MINALLOC;i++){
+						m.memarr[(PAGESIZE/MINALLOC)*0+i]=0;
+				}
+		}else if(a==m.mem[1]){
+				for(int i=0;i<PAGESIZE/MINALLOC;i++){
+						m.memarr[(PAGESIZE/MINALLOC)*1+i]=0;
+				}
+
+		}else if(a==m.mem[2]){
+				for(int i=0;i<PAGESIZE/MINALLOC;i++){
+						m.memarr[(PAGESIZE/MINALLOC)*2+i]=0;
+				}
+
+		}else{
+				for(int i=0;i<PAGESIZE/MINALLOC;i++){
+						m.memarr[(PAGESIZE/MINALLOC)*3+i]=0;
+				}
+
+		}
+/*
 		int dsize=(a-m.mem[0])/MINALLOC;
 		for(int i=0;i<m.memoffset[dsize];i++){
 				m.memarr[dsize+i]=0;
 		}
 		//추가적으로 m.memoffset에 값 지워주기 근데 안지워도 상관없음
-
+*/
 }
 
 void cleanup(void){
 }
-
+/*
 int main(){
 		init_alloc();
 		//testing
@@ -150,7 +173,6 @@ int main(){
 		}
 		printf("\n");
 }
-/*
 int main()
 {
   
