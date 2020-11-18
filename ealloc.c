@@ -8,136 +8,150 @@
 #include <fcntl.h>
 #include "ealloc.h"
 
-//나중에 지우기
-/*
+#define PAGEIDX PAGESIZE/MINALLOC
+#define MEMIDX PAGESIZE/MINALLOC*4
+
 void printvsz(char *hint) {
   char buffer[256];
   sprintf(buffer, "echo -n %s && echo -n VSZ: && cat /proc/%d/stat | cut -d\" \" -f23", hint, getpid());
   system(buffer);
- // getchar();
+  //getchar();
 }
-*/
-
 
 typedef struct memstr{
-		//256바이트단위 메모리 할당 여부 배열
-		int memarr[PAGESIZE/MINALLOC*4];
-		//얼만큼의 size씩 할당됐는지 기록하는 배열
-		int memoffset[PAGESIZE/MINALLOC*4];
+		//메모리 할당 여부 배열
+		int memarr[MEMIDX];
+		//할당된 배열의 시작 인덱스 칸에 어느정도의 인덱스만큼 저장되었는지 저장
+		int memoffset[MEMIDX];
 		//몇개의 페이지가 alloc되어 있는지 count하는 변수
-		int count;
+		int pcount;
+		//몇개의 청크가 alloc되어 있는지 count하는 변수
+		int ccount;
 		char *mem[4];
-		int mempage[PAGESIZE/MINALLOC*4];
+		int isfirst;
 
 } memstr;
 memstr m;
 
 int flag=PROT_WRITE|PROT_READ;
+int checkfunc(char *a){
+		for(int i=0;i<PAGEIDX;i++){
+				if(a==(m.mem[0]+MINALLOC*i))
+						printf("check func index:%d\n",i);
+						return 0;
+		}
+		for(int i=0;i<PAGEIDX;i++){
+				if(a==(m.mem[1]+MINALLOC*i))
+						return 1;
+		}
+		for(int i=0;i<PAGEIDX;i++){
+				if(a==(m.mem[2]+MINALLOC*i))
+						return 2;
+		}
+		for(int i=0;i<PAGEIDX;i++){
+				if(a==(m.mem[3]+MINALLOC*i))
+						return 3;
+		}
+		printf("checkfunc: not found\n");
+
+}
 
 
 void init_alloc(void){
-		for(int i=0;i<PAGESIZE/MINALLOC*4;i++){
+		for(int i=0;i<MEMIDX;i++){
 				m.memarr[i]=0;
 				m.memoffset[i]=0;
-				m.mempage[i]=-1;
 		}
-		m.count=0;
+		m.pcount=0;
+		m.ccount=0;
 		for(int i=0;i<4;i++){
 				m.mem[i]=NULL;
 		}
+		m.isfirst=1;
 }
 
 char *alloc(int a){
-		if(m.count==0){
-				if(a%MINALLOC!=0||a>PAGESIZE )
-						return NULL;
-				//처음엔 페이지 하나 할당
-				int count=a/MINALLOC;
-				if((m.mem[m.count]=mmap(0,PAGESIZE,flag,MAP_PRIVATE|MAP_ANONYMOUS,-1,0))==MAP_FAILED){
-						perror("mmap error\n");
-						exit(1);
+		int start=0;
+		int count=a/MINALLOC;//이만큼의 인덱스 필요함
+		//할당 요청 -> 페이지 부족, 할당하는 함수 작성
+		//m.count==4이면 searching만 수행하면 됨.
+		//할당하면 그만큼 ccount도 올려주기
+		if(m.pcount<4){//m.count가 4가 아닐때 
+				if(m.ccount%PAGEIDX==0||m.isfirst==1){//할당된 페이지가 모두 꽉찬상태
+						if((m.mem[m.pcount]=mmap(0,PAGESIZE,flag,MAP_PRIVATE|MAP_ANONYMOUS,-1,0))==MAP_FAILED){
+								perror("mmap error\n");
+								exit(1);
+						}
+						printf("m.mem[%d]:%s\n",m.pcount,m.mem[m.pcount]);
+						m.pcount++;
+						m.isfirst=0;
 				}
-				for(int i=0; i<PAGESIZE;i++){
+				//alloc할 공간 searching
+				for(int i=0;i<PAGEIDX*m.pcount;i++){
 						if(m.memarr[i]==0){
 								count--;
 						}else{
 								count=a/MINALLOC;
 						}
 						if(count==0){
+								start=i-a/MINALLOC+1;
 								for(int j=0;j<a/MINALLOC;j++){
-										m.memarr[i-a/MINALLOC+1+j]=1;
+										m.memarr[start+j]=1;
 								}
-								m.memoffset[i-a/MINALLOC+1]=a/MINALLOC;
-								m.mempage[i-a/MINALLOC+1]=0;
-								return m.mem[0]+MINALLOC*(i-a/MINALLOC+1);
+								m.memoffset[start]=a/MINALLOC;
+								m.ccount+=a/MINALLOC;
+								
+								//for return
+								int ret=start/PAGEIDX;
+								int retmod=start%PAGEIDX;
+								return m.mem[ret]+retmod*MINALLOC;
+
+
+								
 						}
 				}
-
-	
-		}else if(m.count<4){
-				if(a%MINALLOC!=0||a>PAGESIZE*4 )
-						return NULL;
-				int count=a/MINALLOC;
-				//이제부터는 memarr전체를 대상으로 채크하고 16배수로 넘어갈때마다 alloc
 				
-				for(int i=0; i<PAGESIZE/MINALLOC*4;i++){
-					if((i%PAGESIZE==0)&&(i/PAGESIZE==m.count)){
-							//새로운 페이지로 넘어갈때
-						if((m.mem[m.count]=mmap(0,PAGESIZE,flag,MAP_PRIVATE|MAP_ANONYMOUS,-1,0))==MAP_FAILED){
-								perror("mmap error\n");
-								exit(1);
-						}
-						m.count++;
 
-					}
-					if(m.memarr[i]==0){
-							count--;
-					}else{
-							count=a/MINALLOC;
-					}
-					if(count==0){
-							for(int j=0;j<a/MINALLOC;j++){
-									m.memarr[i-a/MINALLOC+1+j]=1;
-							}
-							m.memoffset[i-a/MINALLOC+1]=a/MINALLOC;
-							//return (m.mem[0]+MINALLOC*(i-a/MINALLOC+1));
-							//각자의 인덱스에 맞는 주소0~3에서 시작해야함.
-							m.mempage[i-a/MINALLOC+1]=i/(PAGESIZE/MINALLOC);
-							return(m.mem[i/(PAGESIZE/MINALLOC)]+MINALLOC*(i%(PAGESIZE/MINALLOC)-a/MINALLOC+1));
-					}
+				
+
+		}else{//m.count가 4일 때 
+				for(int i=0;i<MEMIDX;i++){
+						if(m.memarr[i]==0){
+								count--;
+						}else{
+								count=a/MINALLOC;
+						}
+						if(count==0){
+								start=i-a/MINALLOC+1;
+								for(int j=0;j<a/MINALLOC;j++){
+										m.memarr[start+j]=1;
+								}
+								m.memoffset[start]=a/MINALLOC;
+								//m.ccount+=a/MINALLOC;
+								
+								//for return
+								int ret=start/PAGEIDX;
+								int retmod=start%PAGEIDX;
+								return m.mem[ret]+retmod*MINALLOC;
+
+						}
 				}
 
-			
 
 
-		}else{
-				return NULL;
 		}
+		printf("not allocated\n");
 
 }
 
 void dealloc(char *a){
-		//주소만 보고 어느 페이지에 속하는지 알수 없음...
-		if(a==m.mem[0]){
-				for(int i=0;i<PAGESIZE/MINALLOC;i++){
-						m.memarr[(PAGESIZE/MINALLOC)*0+i]=0;
-				}
-		}else if(a==m.mem[1]){
-				for(int i=0;i<PAGESIZE/MINALLOC;i++){
-						m.memarr[(PAGESIZE/MINALLOC)*1+i]=0;
-				}
-
-		}else if(a==m.mem[2]){
-				for(int i=0;i<PAGESIZE/MINALLOC;i++){
-						m.memarr[(PAGESIZE/MINALLOC)*2+i]=0;
-				}
-
-		}else{
-				for(int i=0;i<PAGESIZE/MINALLOC;i++){
-						m.memarr[(PAGESIZE/MINALLOC)*3+i]=0;
-				}
-
+		//어느페이지에 속하는지
+		int ret=checkfunc(a);
+		printf("num%d\n",ret);
+		for(int i=0;i<PAGESIZE/MINALLOC;i++){
+				m.memarr[(PAGESIZE/MINALLOC)*ret+i]=0;
 		}
+
 /*
 		int dsize=(a-m.mem[0])/MINALLOC;
 		for(int i=0;i<m.memoffset[dsize];i++){
@@ -149,7 +163,8 @@ void dealloc(char *a){
 
 void cleanup(void){
 }
-/*
+
+
 int main(){
 		init_alloc();
 		//testing
@@ -159,8 +174,14 @@ int main(){
 		char *str4=alloc(4096);
 
 		strcpy(str,"hello world");
+		strcpy(str2,"bye world");
 		printf("str: %s\n",str);
-		printf("addr: %s",&str);
+		printf("str2: %s\n",str2);
+		
+		if(str==str2)
+				printf("same\n");
+
+		//printf("addr: %s\n",&str);
 
 
 		dealloc(str2);
@@ -173,6 +194,7 @@ int main(){
 		}
 		printf("\n");
 }
+/*
 int main()
 {
   
