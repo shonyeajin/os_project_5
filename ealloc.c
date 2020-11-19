@@ -10,14 +10,14 @@
 
 #define PAGEIDX PAGESIZE/MINALLOC
 #define MEMIDX PAGESIZE/MINALLOC*4
-
+/*
 void printvsz(char *hint) {
   char buffer[256];
   sprintf(buffer, "echo -n %s && echo -n VSZ: && cat /proc/%d/stat | cut -d\" \" -f23", hint, getpid());
   system(buffer);
   //getchar();
 }
-
+*/
 typedef struct memstr{
 		//메모리 할당 여부 배열
 		int memarr[MEMIDX];
@@ -35,22 +35,29 @@ memstr m;
 
 int flag=PROT_WRITE|PROT_READ;
 int checkfunc(char *a){
-		for(int i=0;i<PAGEIDX;i++){
-				if(a==(m.mem[0]+MINALLOC*i))
-						printf("check func index:%d\n",i);
+		for(int i=0;i<16;i++){
+				if(a==(m.mem[0]+256*i)){
+				//		printf("check func index:%d\n",i);
 						return 0;
+				}
 		}
-		for(int i=0;i<PAGEIDX;i++){
-				if(a==(m.mem[1]+MINALLOC*i))
+		for(int i=0;i<16;i++){
+				if(a==(m.mem[1]+256*i)){
+				//		printf("check func index:%d\n",i);
 						return 1;
+				}
 		}
-		for(int i=0;i<PAGEIDX;i++){
-				if(a==(m.mem[2]+MINALLOC*i))
+		for(int i=0;i<16;i++){
+				if(a==(m.mem[2]+256*i)){
+				//		printf("check func index:%d\n",i);
 						return 2;
+				}
 		}
-		for(int i=0;i<PAGEIDX;i++){
-				if(a==(m.mem[3]+MINALLOC*i))
+		for(int i=0;i<16;i++){
+				if(a==(m.mem[3]+256*i)){
+				//		printf("check func index:%d\n",i);
 						return 3;
+				}
 		}
 		printf("checkfunc: not found\n");
 
@@ -82,7 +89,6 @@ char *alloc(int a){
 								perror("mmap error\n");
 								exit(1);
 						}
-						printf("m.mem[%d]:%s\n",m.pcount,m.mem[m.pcount]);
 						m.pcount++;
 						m.isfirst=0;
 				}
@@ -102,8 +108,9 @@ char *alloc(int a){
 								m.ccount+=a/MINALLOC;
 								
 								//for return
-								int ret=start/PAGEIDX;
-								int retmod=start%PAGEIDX;
+								int ret=start/16;
+								int retmod=start%16;
+								//printf("return value:%d,%d,%d\nstart:%d\n",m.pcount,ret,retmod,start);
 								return m.mem[ret]+retmod*MINALLOC;
 
 
@@ -130,8 +137,8 @@ char *alloc(int a){
 								//m.ccount+=a/MINALLOC;
 								
 								//for return
-								int ret=start/PAGEIDX;
-								int retmod=start%PAGEIDX;
+								int ret=start/16;
+								int retmod=start%16;
 								return m.mem[ret]+retmod*MINALLOC;
 
 						}
@@ -140,14 +147,20 @@ char *alloc(int a){
 
 
 		}
-		printf("not allocated\n");
+	/*	printf("not allocated\n");
+		printf("memarr:");
+		for(int i=0;i<PAGESIZE/MINALLOC*4;i++){
+				printf("%d",m.memarr[i]);
+		}
+		printf("\n");
+*/
 
 }
 
 void dealloc(char *a){
 		//어느페이지에 속하는지
 		int ret=checkfunc(a);
-		printf("num%d\n",ret);
+		//printf("check func return num:%d\n",ret);
 		for(int i=0;i<PAGESIZE/MINALLOC;i++){
 				m.memarr[(PAGESIZE/MINALLOC)*ret+i]=0;
 		}
@@ -163,7 +176,7 @@ void dealloc(char *a){
 
 void cleanup(void){
 }
-
+/*
 
 int main(){
 		init_alloc();
@@ -178,7 +191,7 @@ int main(){
 		printf("str: %s\n",str);
 		printf("str2: %s\n",str2);
 		
-		if(str==str2)
+		if(m.mem[0]==m.mem[1])
 				printf("same\n");
 
 		//printf("addr: %s\n",&str);
@@ -194,6 +207,7 @@ int main(){
 		}
 		printf("\n");
 }
+*/
 /*
 int main()
 {
